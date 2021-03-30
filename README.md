@@ -30,7 +30,7 @@ def SaveModel(my_model,fileSTR):
     Wmodel.close()
     print("Total bytes:"+str(totalbytes))
 ```
-You can see how the SaveModel works in the Jypiter notebooks. 
+You can see how the SaveModel works in the Jupyter notebooks. 
 
 Model in Tensorflow must match the Model created on Mokka. For the sake of binary size there aren't validity checks when loading weights.
 
