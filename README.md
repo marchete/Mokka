@@ -104,6 +104,8 @@ Similar summary. Same number of trainable parameters
 
 30KB, including MNIST load code
 
+Tester will also save a ```DENSE.test``` file. These are an export of the loaded weights, the file should be exactly the same as ```DENSE.weights```.
+
 ## Future work
 
 1. Convolutional Network Layers. Convolutional are expensive to run and hard to implement, more in AVX2. They should be in optional ```#define```, to only use them when needed.
