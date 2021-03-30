@@ -35,7 +35,7 @@ You can see how the SaveModel works in the Jupyter notebooks.
 Model in Tensorflow must match the Model created on Mokka. For the sake of binary size there aren't validity checks when loading weights.
 
 ## Requirements
-1. Tested on Ubuntu 18
+1. Tested on Ubuntu 18 (WSL)
 2. C++ compiler, I used Clang++ 9. It can be compiled in Visual Studio too.
 3. UPX for binary compression.
 4. Tensorflow 2.0 for training, it can be even another PC. I have TF2.0 but on Windows, because I can use CUDA for GPU acceleration.
