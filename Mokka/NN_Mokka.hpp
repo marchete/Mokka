@@ -555,6 +555,14 @@ void Activation_LeakyReLU(const Tensor& input, Tensor& output) {
 
 void Activation_Softmax(const Tensor& input, Tensor& output) {
 	float sum = 0.0f;
+	int rem = 8-(output.size % 8);
+	if (rem != 0)
+	{
+		for (int i = 0; i < rem; ++i)
+		{
+			output.setElement( (uint32_t)(output.xmm_size * 8 - i - 1),-99999999.99f);
+		}
+	}	
 	for (uint32_t i = 0; i < output.xmm_size; ++i)
 	{
 		output.xmm[i].v = exp256_ps(input.xmm[i].v);
