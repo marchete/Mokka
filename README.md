@@ -109,7 +109,7 @@ Tester will also save a ```DENSE.test``` file. These are an export of the loaded
 ## Future work
 
 1. Convolutional Network Layers. Convolutional are expensive to run and hard to implement, more in AVX2. They should be in optional ```#define```, to only use them when needed.
-2. AlphaZero implementation.
+~~2. AlphaZero implementation.~~ A similar Alphazero NN was succesfully implemented, see https://github.com/marchete/CGZero
 
 ## References
 
