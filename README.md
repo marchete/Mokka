@@ -110,7 +110,7 @@ Accuracy is the same than on Test
 
 Similar summary. Same number of trainable parameters.
 
-Unfortunately I found Convolutional inference too slow. It's 3-5x slower than Dense. I need to recheck if I'm duplicating some work or something, but the output is the same expected value. I profiled the code on Visual Studio, 78% of the time is spent on the function `WeightBiasLayer::calculateOutput(Tensor &input_mat)`
+Unfortunately I found Convolutional inference too slow. It's 5-10x slower than Dense. I need to recheck if I'm duplicating some work or something, but the output is the same expected value. I profiled the code on Visual Studio, 78% of the time is spent on the function `WeightBiasLayer::calculateOutput(Tensor &input_mat)`
 on line:
 ```
 output.xmm[i].v = _mm256_fmadd_ps(fm, weights[N].xmm[i].v, output.xmm[i].v);
