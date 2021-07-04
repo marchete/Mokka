@@ -18,15 +18,15 @@
 
 using namespace std;
 
-Model CreateModel(shared_ptr<Input>& input,shared_ptr<Layer>& policy,shared_ptr<Layer>& value ){
-	shared_ptr<Layer> x,split;
-	#define NN(M_M) make_shared<M_M>
-	input	=  NN(Input)(vector<int>{28*28});
-	x		=(*NN(Dense)("Dense", 128,RELU))(input);
-	policy	=(*NN(Dense)("Soft", 10,SOFTMAX))(x);
+Model CreateModel(shared_ptr<Input>& input, shared_ptr<Layer>& policy, shared_ptr<Layer>& value) {
+	shared_ptr<Layer> x, split;
+#define NN(M_M) make_shared<M_M>
+	input = NN(Input)(vector<int>{28 * 28});
+	x = (*NN(Dense)("Dense", 128, RELU))(input);
+	policy = (*NN(Dense)("Soft", 10, SOFTMAX))(x);
 	//policy	=(*NN(Dense)("Soft", 10,NONE))(x);
-	#undef NN
-	Model model({input},{policy});//("simple_test28Gray.ahsf", "weights", "mean");
+#undef NN
+	Model model({ input }, { policy });//("simple_test28Gray.ahsf", "weights", "mean");
 	return model;
 }
 
@@ -53,23 +53,35 @@ struct Stopwatch {
 	long long EllapsedMilliseconds() { return chrono::duration_cast<chrono::milliseconds>(Now() - c_time).count(); }
 } stopwatch;
 
-/* Unfinished
+
 Model CreateCNN(shared_ptr<Input>& input, shared_ptr<Layer>& policy, shared_ptr<Layer>& value) {
-	shared_ptr<Layer> x, split;
+	shared_ptr<Layer> x;
 #define NN(M_M) make_shared<M_M>
-	input = NN(Input)(vector<int>{28, 28, 1});
-	x = (*NN(Conv)("Conv1", 32, 3, 2, 0, RELU))(input);
-	//x		=(*NN(Conv )(5, 3, 1, 0, RELU))(input);
-	x = (*NN(Conv)("Conv2", 64, 3, 2, 0, RELU))(x);
-	x = (*NN(Conv)("Conv3", 32, 3, 1, 0, Activation_LeakyReLU<0,100>))(x);
-	x = (*NN(Dense)("Dense", 64, RELU))(x);
+	input = NN(Input)(vector<int>{28 , 28,1});
+	x = (*NN(Conv2D)("Conv1", 8, 3, 3, 2, 2, "valid", RELU))(input);
+	x = (*NN(Conv2D)("Conv2", 8, 3, 3, 1, 1, "valid", RELU))(x);
+	x = (*NN(Conv2D)("Conv3", 8, 3, 3, 1, 1, "valid", RELU))(x);
+	x = (*NN(Dense)("Dense", 16, RELU))(x);
 	policy = (*NN(Dense)("Soft", 10, SOFTMAX))(x);
 #undef NN
-	Model model({ input }, { policy });//("simple_test28Gray.ahsf", "weights", "mean");
+	Model model({ input }, { policy });
 	return model;
 }
-*/
-void MNIST_inference(Model& model,int padding =0) {
+Model CreateCNN_T(shared_ptr<Input>& input, shared_ptr<Layer>& policy, shared_ptr<Layer>& value) {
+	shared_ptr<Layer> x;
+#define NN(M_M) make_shared<M_M>
+	input = NN(Input)(vector<int>{28, 28, 1});
+	x = (*NN(Conv2D)("Conv1", 5, 3, 3, 2, 2, "valid", RELU))(input);
+	x = (*NN(Conv2D)("Conv2", 5, 3, 3, 1, 1, "valid", RELU))(x);
+	x = (*NN(Conv2D)("Conv3", 5, 3, 3, 1, 1, "valid", RELU))(x);
+	x = (*NN(Dense)("Dense", 16, RELU))(x);
+	policy = (*NN(Dense)("Soft", 10, SOFTMAX))(x);
+#undef NN
+	Model model({ input }, { policy });
+	return model;
+}
+
+void MNIST_inference(Model& model, int padding = 0) {
 	vector<Tensor> Tensor_training_images;
 	vector<Tensor> Tensor_test_images;
 	vector<Tensor> Tensor_training_labels;
@@ -78,7 +90,7 @@ void MNIST_inference(Model& model,int padding =0) {
 	const bool limitedLoad = false;
 	const char* MNIST_DATA_LOCATION = "./mnist/";
 	mnist::MNIST_dataset<std::vector, std::vector<uint8_t>, uint8_t> dataset =
-	mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>(MNIST_DATA_LOCATION, limitedLoad ? 10 : 0, limitedLoad ? 10 : 0);
+		mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>(MNIST_DATA_LOCATION, limitedLoad ? 10 : 0, limitedLoad ? 10 : 0);
 	std::cout << "Nbr of training images = " << dataset.training_images.size() << std::endl;
 	std::cout << "Nbr of training labels = " << dataset.training_labels.size() << std::endl;
 	std::cout << "Nbr of test images = " << dataset.test_images.size() << std::endl;
@@ -86,7 +98,7 @@ void MNIST_inference(Model& model,int padding =0) {
 	const auto imageToTensorFn = [=](const std::vector<uint8_t>& image, Tensor& t)
 	{
 		//	t.initZero({ 28,28,1 });
-		t = Tensor({ 1,1, (28+padding) * (28 + padding) });
+		t = Tensor({ 1,1, (28 + padding) * (28 + padding) });
 		for (int y = 0; y < 28; ++y) {
 			for (int x = 0; x < 28; ++x) {
 				t.setElement(y *(28 + padding) + x, image[y * 28 + x] / 255.0f);
@@ -99,7 +111,7 @@ void MNIST_inference(Model& model,int padding =0) {
 		t = Tensor({ 1, 1, 10 });
 		for (int i = 0; i < 10; i++)
 		{
-			t.setElement(i, i == label?1.0f:0.0f);
+			t.setElement(i, i == label ? 1.0f : 0.0f);
 		}
 	};
 
@@ -135,11 +147,11 @@ void MNIST_inference(Model& model,int padding =0) {
 		int correct = 0;
 		//for (int k = 0; k < accSamplesCount; k++)
 		//for (int index = 0; index < dataset.training_images.size(); ++index)
-		for (int index = 0; index < Tensor_training_images.size(); ++index)
-		//for (auto T: Tensor_training_images)
+		for (int index = 0; index < (int)Tensor_training_images.size(); ++index)
+			//for (auto T: Tensor_training_images)
 		{
 			//const int index = g_randomGen() % Tensor_training_images.size();
-			model.inputs[0]->output =  Tensor_training_images[index];
+			model.inputs[0]->output = Tensor_training_images[index];
 			model.predict();
 			const Tensor& ans = model.outputs[0]->output;
 			float MaxValue = -9999999.99f;
@@ -165,7 +177,7 @@ void MNIST_inference(Model& model,int padding =0) {
 		int total = 0;
 		int correct = 0;
 		//for (int k = 0; k < accSamplesCount; k++)
-		for (int index = 0; index < Tensor_test_images.size(); ++index)
+		for (int index = 0; index < (int)Tensor_test_images.size(); ++index)
 		{
 			//const int index =  g_randomGen() % dataset.test_images.size();
 			model.inputs[0]->output = Tensor_test_images[index];
@@ -184,10 +196,10 @@ void MNIST_inference(Model& model,int padding =0) {
 			{
 				correct++;
 			}
-		/*	if (index == 0)
-			{
-				cerr << (dataset.test_labels[index] == maxIndex ? "OK" : "MISS") << " Numero " << (int)dataset.test_labels[index] << " se ha estimado como  " << maxIndex << "(" << 100.0*ans.getElement(maxIndex) << "%) : " << ans << endl;
-			}*/
+			/*	if (index == 0)
+				{
+					cerr << (dataset.test_labels[index] == maxIndex ? "OK" : "MISS") << " Numero " << (int)dataset.test_labels[index] << " se ha estimado como  " << maxIndex << "(" << 100.0*ans.getElement(maxIndex) << "%) : " << ans << endl;
+				}*/
 			total++;
 			++countPredict;
 		}
@@ -199,7 +211,7 @@ void MNIST_inference(Model& model,int padding =0) {
 	double f = 0.0;
 	for (int i = 0; i < 10; ++i)
 	{
-		f+=  calcAcc() + calcAccT();
+		f += calcAcc() + calcAccT();
 	}
 	cout << " Took: " << stopwatch.EllapsedMilliseconds() << "ms mean:" << stopwatch.EllapsedMicroseconds() / countPredict << "us/sample" << endl;
 	std::cout << "Est Acc:" << std::setw(7) << std::setprecision(6) << calcAcc() << "% TrainingAcc:" << std::setw(7) << std::setprecision(6) << calcAccT() << "%\n";
@@ -208,39 +220,41 @@ void MNIST_inference(Model& model,int padding =0) {
 
 int main() {
 	shared_ptr<Input> input;
-	shared_ptr<Layer> policy,value;
+	shared_ptr<Layer> policy, value;
 
-	cerr << "*****************************************************"<<endl;
-	cerr << "********** TEST 'MNIST Simple.ipynb' ****************"<<endl;
-	cerr << "********** Using dense.weights       ****************"<<endl;
-	cerr << "*****************************************************"<<endl;
+	cerr << "*****************************************************" << endl;
+	cerr << "********** TEST 'MNIST Simple.ipynb' ****************" << endl;
+	cerr << "********** Using dense.weights       ****************" << endl;
+	cerr << "*****************************************************" << endl;
 	Model model = CreateModel(input, policy, value);
 	model.summary();
 	model.loadWeights("DENSE.weights");
 	model.saveWeights("DENSE.test");
 	MNIST_inference(model);
-	
 
-	cerr << "*****************************************************"<<endl;
-	cerr << "********** TEST 'MNIST Simple29.ipynb' **************"<<endl;
-	cerr << "********** Using dense29.weights       **************"<<endl;
-	cerr << "*****************************************************"<<endl;
+
+	cerr << "*****************************************************" << endl;
+	cerr << "********** TEST 'MNIST Simple29.ipynb' **************" << endl;
+	cerr << "********** Using dense29.weights       **************" << endl;
+	cerr << "*****************************************************" << endl;
 
 	Model model29 = CreateModel29(input, policy, value);
 	model29.summary();
 	model29.loadWeights("DENSE29.weights");
 	model29.saveWeights("DENSE29.test");
-	MNIST_inference(model29,1);
+	MNIST_inference(model29, 1);
 
-/*
-	Model CNNmodel = CreateCNN(input, policy, value);
-	CNNmodel.summary();
-	CNNmodel.loadWeights("PRUEBA.weights");
-	CNNmodel.saveWeights("PRUEBA.test");
-	MNIST_inference(CNNmodel);
-	*/
+	cerr << "*****************************************************" << endl;
+	cerr << "********** TEST 'MNIST CNN.ipynb' *******************" << endl;
+	cerr << "********** Using CNN.weights      *******************" << endl;
+	cerr << "*****************************************************" << endl;
 
-
-
-    return 0;
+	Model modelCNN = CreateCNN_T(input, policy, value);
+	modelCNN.summary();
+	modelCNN.loadWeights("CNN_T.weights");
+	modelCNN.saveWeights("CNN_T.test");
+	cerr << "Please wait. CNN inference takes some time to finish...."<<endl;
+	MNIST_inference(modelCNN);
+	
+	return 0;
 }
