@@ -38,6 +38,13 @@
 #define ASSERT(x)
 #endif
 
+#ifdef _MSC_VER
+#define ALIGN __declspec(align(32))
+#else 
+#define ALIGN __attribute__((aligned(32)))
+#endif
+
+
 union __m256_f {
 	__m256 v;
 	float f[8];
@@ -93,13 +100,6 @@ inline __m256 exp256_ps(const __m256& V) {
 	y = MUL(y, pow2n);
 	return y;
 }
-//AVX2 Faster Exponential functions
-inline __m256 fast_exp256_ps(const __m256& V) {
-	const __m256 C1 = _mm256_set1_ps(1064872507.1541044f);
-	const __m256 C2 = _mm256_set1_ps(12102203.161561485f);
-	return _mm256_castsi256_ps(_mm256_cvttps_epi32(_mm256_fmadd_ps(C2, V, C1)));
-}
-
 #undef SET
 #undef MUL
 #undef FMA
@@ -189,6 +189,19 @@ private:
 
 typedef std::vector<__m256_f, aligned_allocator<__m256_f, sizeof(__m256_f)> > aligned_vector;
 
+
+inline int getIndex3D(int x, int y, int z,vector<int>& shape)
+{
+	//return (x + shape[0] * y) * shape[1] + z;
+	//return x +  (y  + z * shape[1]) * shape[0];
+	return z + (y + x * shape[1]) * shape[2];
+}
+inline int getIndex4D(int x, int y, int z,int v, vector<int>& shape)
+{
+	//return (x + shape[0] * y) * shape[1] + z;
+	//return x +  (y  + z * shape[1]) * shape[0];
+	return v+(z + (y + x * shape[1]) * shape[2])*shape[3];
+}
 class Tensor {
 public:
 	aligned_vector xmm;
@@ -204,7 +217,7 @@ public:
 
 		xmm_size = static_cast<uint64_t>(std::ceil(size / 8.0f));
 
-		xmm.resize(xmm_size);
+		xmm.resize((size_t)xmm_size);
 
 		for (int i = 0; i < xmm_size; i++) {
 			xmm[i].v = _mm256_setzero_ps();
@@ -229,10 +242,24 @@ public:
 			return xmm[index >>3].f[index & 7];
 		}*/
 
+	int getIndex3D(int x, int y, int z)
+	{
+		return ::getIndex3D(x,y,z,shape);
+	}
+
+	float getValue3D(int x, int y, int z)
+	{
+		return  xmm[0].f[getIndex3D(x, y, z)];
+	}
+	float getValue4D(int x, int y, int z,int d)
+	{
+		return  xmm[0].f[::getIndex4D(x,y,z,d,shape)];
+	}
+
 	void load(std::vector<float> &vec) {
-		xmm.resize(xmm_size);
-		xmm[xmm_size - 1].v = _mm256_setzero_ps(); //Last one to zero because it can be partially loaded
-		memcpy(reinterpret_cast<char*>(xmm.data()), reinterpret_cast<char*>(vec.data()), size * sizeof(float));
+		xmm.resize((size_t)xmm_size);
+		xmm[(int)xmm_size - 1].v = _mm256_setzero_ps(); //Last one to zero because it can be partially loaded
+		memcpy(reinterpret_cast<char*>(xmm.data()), reinterpret_cast<char*>(vec.data()), (size_t)size * sizeof(float));
 	};
 	explicit Tensor(std::vector<float> &vec, std::vector<int> shape) : shape(shape) {
 		size = 1;
@@ -318,10 +345,66 @@ public:
 		}
 	}
 	// Prints the shape.
+	string print3DMatrix() {
+		string s = "";
+		for (int z = 0; z < shape[2]; ++z)
+		{
+			s += "Channel:" + to_string(z) + "----------------\r\n";
+			for (int y = 0; y < shape[1]; ++y)
+			{
+				s += "[";
+				for (int x = 0; x < shape[0]; ++x)
+				{
+					s+= to_string(getValue3D(x, y, z))+",";
+				}
+				s += "]\r\n";
+			}
+		}
+		return s;
+	}
+	string printTF3DMatrix() {
+		string s = "";
+		for (int x = 0; x < shape[0]; ++x)
+		{
+			s += "[";
+			for (int y = 0; y < shape[1]; ++y)
+			{
+				s += "[";
+				for (int z = 0; z < shape[2]; ++z)
+				{
+					s += to_string(getValue3D(x, y, z)) + ",";
+				}
+				s += "]\r\n";
+			}
+			s += "]\r\n";
+		}
+		return s;
+	}
+	string printTF4DMatrix() {
+		string s = "";
+		for (int x = 0; x < shape[0]; ++x)
+		{
+			s += "[";
+			for (int y = 0; y < shape[1]; ++y)
+			{
+				s += "[";
+				for (int z = 0; z < shape[2]; ++z)
+				{
+					s += "[";
+					for (int v = 0; v < shape[3]; ++v)
+						s += to_string(getValue4D(x, y, z,v)) + ",";
+					s += "]\r\n";
+				}
+				s += "]\r\n";
+			}
+			s += "]\r\n";
+		}
+		return s;
+	}
 	std::string shape_str() const {
 		std::string shape_str = "(None, ";
 
-		for (int i = 0; i < shape.size() - 1; i++) {
+		for (int i = 0; i < (int)shape.size() - 1; i++) {
 			shape_str += std::to_string(shape[i]) + ", ";
 		}
 		shape_str += std::to_string(shape[shape.size() - 1]) + ")";
@@ -364,8 +447,8 @@ public:
 
 
 	void load(std::istream& is) {
-		xmm.resize(xmm_size);
-		xmm[xmm_size - 1].v = _mm256_setzero_ps(); //Last one to zero because it can be partially loaded
+		xmm.resize((uint32_t)xmm_size);
+		xmm[(uint32_t)xmm_size - 1].v = _mm256_setzero_ps(); //Last one to zero because it can be partially loaded
 		is.read(reinterpret_cast<char*>(xmm.data()), size * sizeof(float));
 	};
 	void save(std::ostream& os) {
@@ -581,17 +664,29 @@ public:
 		calculateOutput(inputLayer->output);
 	};
 
-	void load(std::istream& is)override {
-		for (auto&w: weights)
-			w.load(is);
-		bias.load(is);
+	void calculateOutput(Tensor &input_mat) override {
+		for (int i = 0; i < output.xmm_size; ++i) {
+			output.xmm[i].v = bias.xmm[i].v;
+		}
+		for (size_t N = 0; N < input_mat.size; N++) {
+			float val = input_mat.xmm[0].f[N];
+			if (val == 0.0f)
+				continue;
+			else if (val == 1.0f) {
+				for (int i = 0; i < output.xmm_size; ++i) {
+					output.xmm[i].v = _mm256_add_ps(weights[N].xmm[i].v, output.xmm[i].v);
+				}
+			}
+			else {
+				auto fm = _mm256_set1_ps(val);
+				for (int i = 0; i < output.xmm_size; ++i) {
+					output.xmm[i].v = _mm256_fmadd_ps(fm, weights[N].xmm[i].v, output.xmm[i].v);
+				}
+			}
+		}
+		activator(output, output);
 	};
-	void save(std::ostream& os)override {
-		for (auto& w : weights)
-			w.save(os);
-		bias.save(os);
-	};
-	inline int countParams() override { return (int)(weights.size()*weights[0].size + bias.size); };
+
 };
 
 class Input : public Layer {
@@ -622,7 +717,7 @@ public:
 	void save(std::ostream& os)override {};
 	string getType() override { return "Input"; };
 	inline int countParams() override { return 0; };
-	int summary() override { return 0; };
+//	int summary() override { return 0; };
 	
 	virtual Tensor* getInputTensor(){
 		return &output;
@@ -647,6 +742,153 @@ public:
 	}
 };
 
+
+// 3 dimensions= x * y * channels
+//The convolution is precalculated to weights<totalInputs> and it works just as a Dense layer. I precalculate the output for each individual input, as it was a single 1.0f input, and save it on weight<> vector.
+//Then on inference I just do input * weight[inputIndex]. That's faster because it's just index and multiplications and additions.
+//Also if an input is zero I just can ignore it. That's common on ReLU outputs (all negatives are zero) and one-hot inputs (many 0's and some 1's). This improves performance.
+class Conv2D : public WeightBiasLayer {
+public:
+	vector<int> inputDim;
+	Tensor kernel;
+	int filters;
+	int strideX, strideY;
+	int paddingX,paddingY;
+
+	Tensor SRC_bias;
+	Tensor SRC_weights;
+
+
+	void setPadding(string _padding) {
+		if (_padding == "valid")
+		{
+			paddingX = 0;
+			paddingY = 0;
+		}
+		else if (_padding == "same")
+		{
+			paddingX = (int)floor((float)kernel.shape[0] / 2.0f);
+			paddingY = (int)floor((float)kernel.shape[1] / 2.0f);
+		}
+		else {
+			cerr << "ERROR, invalid padding on Conv2D Layer " << name << ": Padding:" << _padding << endl;
+		}
+	}
+
+	//Normal kernel
+	// 1 1 1
+	// 1 1 1
+	// 1 1 1
+	Conv2D(string name, int _filters, int _kernelX, int _kernelY, int _strideX, int _strideY,string _padding="valid", Activators activator=NONE) 
+		: WeightBiasLayer(name, activator, 0), strideX(_strideX), strideY(_strideY) {
+		ASSERT(kernelX > 0);
+		ASSERT(kernelY > 0);
+		filters = _filters;
+		kernel = Tensor({ _kernelX,_kernelY,_filters });
+		auto ones = _mm256_set1_ps(1.0f);
+		for (int i = 0; i < kernel.xmm_size; ++i)
+		{
+			kernel.xmm[i].v = ones;
+		}
+		setPadding(_padding);
+	}
+	//Custom filter kernel, e.g. hex grids
+	// 0 1 1
+	// 1 1 1
+	// 1 1 0
+	Conv2D(string name, int _filters, Tensor _kernel, int _strideX, int _strideY, string _padding = "valid", Activators activator = NONE)
+		: WeightBiasLayer(name, activator, 0), strideX(_strideX), strideY(_strideY) {
+		filters = _filters;
+		kernel = _kernel;
+		setPadding(_padding);
+	}
+
+	void load(std::istream& is)override {
+		SRC_weights.load(is);
+		SRC_bias.load(is);
+	};
+	void save(std::ostream& os)override {
+		SRC_weights.save(os);
+		SRC_bias.save(os);
+	};
+
+	void initialize(vector<int>& Dim) override {
+		//It must be x,y,filters
+		ASSERT(Dim.size() == 3);
+		inputDim = Dim;
+		int totalSize = 1;
+		for (int& n : Dim)
+			totalSize *= n;
+
+		SRC_weights = Tensor(vector<int>{kernel.shape[0], kernel.shape[1], Dim[2], kernel.shape[2] });
+		SRC_bias = Tensor(vector<int>{kernel.shape[2]});
+		int shp0 = (int)floor(((double)Dim[0] + (paddingX * 2) - kernel.shape[0]) / strideX + 1);
+		int shp1 = (int)floor(((double)Dim[1] + (paddingY * 2) - kernel.shape[1]) / strideY + 1);
+		output = Tensor(vector<int>{shp0, shp1, filters});
+		num_of_outputs = output.shape[0] * output.shape[1] * output.shape[2];
+		for (int i = 0; i < totalSize; ++i)
+			weights.emplace_back(Tensor(vector<int>{num_of_outputs}));
+		bias = Tensor(vector<int>{num_of_outputs});
+#ifdef DEBUG_MODE
+		cerr << "***** LAYER " << name << "******" << endl;
+		//cerr << "Output " << ":" << output.shape_str()<<endl;
+		cerr << "Weights " << ":" << weights.shape_str() << endl;
+		cerr << "Bias " << ":" << bias.shape_str() << endl;
+#endif
+	}
+
+	void precompute() override {
+
+		//bias precalc
+		for (int i = 0; i < bias.size; ++i)
+		{
+			bias.setElement(i, SRC_bias.getElement(i% SRC_bias.size));
+		}
+		for (int i = 0; i < (int)weights.size(); ++i)
+			for (int x = 0; x < weights[i].xmm_size; ++x)
+				weights[i].xmm[x].v = _mm256_setzero_ps();
+		//Precomputed weights recalc. 
+		const int in_sx = inputDim[0];
+		const int in_sy = inputDim[1];
+		for (int d = 0; d < output.shape[2]; d++)
+		{
+			int y = -paddingY;
+			for (int ay = 0; ay < output.shape[1]; ay++)
+			{
+				int x = -paddingX;
+				for (int ax = 0; ax < output.shape[0]; ax++)
+				{
+					for (int fy = 0; fy < kernel.shape[1]; fy++)
+					{
+						int oy = y + fy;
+						for (int fx = 0; fx < kernel.shape[0]; fx++)
+						{
+							int ox = x + fx;
+							if (oy >= 0 && oy < in_sy && ox >= 0 && ox < in_sx)
+							{
+								for (int inD = 0; inD < inputDim[2]; inD++)
+								{
+									int indW = getIndex3D(ox, oy, inD, inputDim);
+									auto& P = weights[indW];
+									float kW = kernel.getValue3D(fx, fy, d);
+									if (kW != 0.0f)
+										P.xmm[0].f[output.getIndex3D(ax, ay, d)] += SRC_weights.getValue4D(fx, fy, inD,d);
+								}
+							}
+
+						}
+					}
+					x += strideX;
+				}
+				y += strideY;
+			}
+		}
+	}
+
+	string getType() override { return "Conv2D"; };
+	inline int countParams() override { return (int)(SRC_weights.size + SRC_bias.size); };
+};
+
 class Dense : public WeightBiasLayer {
 public:
 	Dense(std::string name, int num_of_outputs, Activators activator)
@@ -656,28 +898,17 @@ public:
 
 	~Dense() {};
 
-	void calculateOutput(Tensor &input_mat) override {
-		for (int i = 0; i < output.xmm_size; ++i) {
-			output.xmm[i].v = bias.xmm[i].v;
-		}
-		for (size_t N = 0; N < input_mat.size; N++) {
-			float val = input_mat.xmm[0].f[N];
-			if (val == 0.0f)
-				continue;
-			else if (val == 1.0f) {
-				for (int i = 0; i < output.xmm_size; ++i) {
-					output.xmm[i].v = _mm256_add_ps(weights[N].xmm[i].v, output.xmm[i].v);
-				}
-			}
-			else {
-				auto fm = _mm256_set1_ps(val);
-				for (int i = 0; i < output.xmm_size; ++i) {
-					output.xmm[i].v = _mm256_fmadd_ps(fm, weights[N].xmm[i].v, output.xmm[i].v);
-				}
-			}
-		}
-		activator(output, output);
+	void load(std::istream& is)override {
+		for (auto&w : weights)
+			w.load(is);
+		bias.load(is);
 	};
+	void save(std::ostream& os)override {
+		for (auto& w : weights)
+			w.save(os);
+		bias.save(os);
+	};
+
 
 	// Sets up the Dense layer, it takes the shape of the matrix before it to compute its own matrices.
 	void initialize(vector<int>& Dim) override {
@@ -699,7 +930,78 @@ public:
 	void precompute() override {	}
 
 	string getType() override { return "Dense"; };
+
+	inline int countParams() override { return (int)(weights.size()*weights[0].size + bias.size); };
 };
+
+
+
+//Utilities to compress weights more. It changes from float32 to float16 and viceversa.
+//Loss of accuracy with the compression/decompress is minimal.
+#pragma warning( push )
+#pragma warning( disable : 4556 )
+void file32to16(string f32, string f16) {
+	ifstream I(f32, ifstream::in | ios::binary);
+	ofstream O(f16, ifstream::out | ios::binary);
+	if (I.good() && O.good()) {
+		ALIGN __m128i H;
+		auto init = I.tellg();
+		I.seekg(0, ios::end);
+		int S = (int)(I.tellg() - init);
+		I.seekg(0);
+		union {
+			char B[32];
+			__m256 V;
+		};
+		int e8 = S / 32;
+		int r8 = S % 32;
+		for (int i = 0; i < e8; ++i)
+		{
+			I.read(B, 32);
+			H = _mm256_cvtps_ph(V, _MM_FROUND_NO_EXC);
+			O.write((char*)&H, 16);
+		}
+		if (r8 > 0)
+		{
+			I.read(B, r8);
+			H = _mm256_cvtps_ph(V, _MM_FROUND_NO_EXC);
+			O.write((char*)&H, r8 / 2);
+		}
+		I.close();
+		O.close();
+	}
+}
+
+//Reverse conversion, 16b to 32b
+void file16to32(string f16, string f32) {
+	ifstream I(f16, ios::binary);
+	ofstream O(f32, ios::binary);
+	if (I.good() && O.good()) {
+		ALIGN __m256 f;
+		auto init = I.tellg();
+		I.seekg(0, ios::end);
+		int S = (int)(I.tellg()-init);
+		I.seekg(0);
+		union { char B[16]; __m128i H; };
+		int e8 = S / 16;
+		int r8 = S % 16;
+		for (int i = 0; i < e8; ++i)
+		{
+			I.read(B, 16);
+			f = _mm256_cvtph_ps(H);
+			O.write((char*)&f, 32);
+		}
+		if (r8 > 0)
+		{
+			I.read(B, r8);
+			f = _mm256_cvtph_ps(H);
+			O.write((char*)&f, r8 * 2);
+		}
+		I.close();
+		O.close();
+	}
+}
+#pragma warning( pop )
 
 
 class Model {
@@ -736,9 +1038,9 @@ void Model::summary() {
 	const string line2 = "=================================================================";
 	cout << line << endl;
 	cout << "Layer (type)                Output Shape              Param #    " << endl;
-	for (size_t i = 1; i < m_forwardPath.size(); ++i)
+	for (size_t i = 0; i < m_forwardPath.size(); ++i)
 	{
-		cout << (i == 1 ? line2 : line) << endl; //Skip 1st layer, input
+		cout << (i == 0 ? line2 : line) << endl; //Skip 1st layer, input
 		trainableParams += m_forwardPath[i]->summary();
 	}
 	cout << line2 << endl;

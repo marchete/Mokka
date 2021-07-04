@@ -1,11 +1,11 @@
 # Mokka
-Mokka is a minimal Inference Engine for Dense Layer Neural Networks. Written on a single C++ header, it uses AVX2.
-The code is aimed to give good performance on a minimal binary size, without external references.
+Mokka is a minimal Inference Engine for Dense and Convolutional 2D Layer Neural Networks. Written on a single C++ header, it uses AVX2.
+The code is aimed to give good performance on a minimal binary size, without external references. At some special cases (one-hot inputs with more zeros than ones, or ReLU outputs) it's 200% faster than Tensorflow.
 Most Inference Engines are bloated with external libraries, complex loaders that inflates the binary size.
 
 These engines are too big to use it in AI challenges (i.e. www.codingame.com ), were file size is limited to <160KB without external libraries.
 
-Current Test binary output is like 30KB in size, including MNIST source code that can be removed when not used. It's feasible to have a compressed binary of 60KB + 80KB of weights.
+Current Test binary output is like 32KB in size, including MNIST source code that can be removed when not used. It's feasible to have a compressed binary of 40KB + 110KB of weights (Succesfully tested on CGZero, an AlphaZero like bot that uses Mokka ).
 
 
 ## Training
@@ -60,7 +60,7 @@ Some structures are flattened to W\*H instead of being a {W,H} matrix
 
 ## MNIST test
 
-I've tested the accuracy of the code with two MNIST tests. The code achieves 12 us/sample, that is a good performance. Tensorflow is faster, 9us/sample.
+I've tested the accuracy of the code with two MNIST tests. The code achieves 4 us/sample, that is a good performance. Tensorflow needs 9us/sample. That's why I optimize according to inputs. Zero inputs are skipped, and 1.0 inputs adds without multiplying the input.
 They are called ```MNIST Simple.ipynb``` and ```MNIST Simple29.ipynb```, they are Jupyter Notebooks. If you run both notebooks they will create two weight files on ./Mokka subfolder, called ```DENSE.weights``` and ```DENSE29.weights``` respectively.
 
 Running the Test (requires clang++9):
@@ -98,18 +98,42 @@ Accuracy is the same than on Test
 
 Similar summary. Same number of trainable parameters
 
+**Testing MNIST CNN.ipynb**
+
+![Test3a](https://github.com/marchete/Mokka/raw/main/img/Test3a.JPG)
+
+![Test3b](https://github.com/marchete/Mokka/raw/main/img/Test3b.JPG)
+
+Accuracy is the same than on Test
+
+![Test3c](https://github.com/marchete/Mokka/raw/main/img/Test3c.JPG)
+
+Similar summary. Same number of trainable parameters.
+
+Unfortunately I found Convolutional inference too slow. It's 15x slower than Dense. I need to recheck if I'm duplicating some work or something, but the output is the same expected value. I profiled the code on Visual Studio, 78% of the time is spent on the function `WeightBiasLayer::calculateOutput(Tensor &input_mat)`
+on line:
+```
+output.xmm[i].v = _mm256_fmadd_ps(fm, weights[N].xmm[i].v, output.xmm[i].v);
+```
+
 **Binary size**
 
 ![BinarySize](https://github.com/marchete/Mokka/raw/main/img/CompileSize.JPG)**
 
-30KB, including MNIST load code
+32KB, including MNIST load code
 
 Tester will also save a ```DENSE.test``` file. These are an export of the loaded weights, the file should be exactly the same as ```DENSE.weights```.
 
 ## Future work
 
-1. Convolutional Network Layers. Convolutional are expensive to run and hard to implement, more in AVX2. They should be in optional ```#define```, to only use them when needed.
-2. ~~AlphaZero implementation.~~ A similar Alphazero NN was succesfully implemented, see https://github.com/marchete/CGZero
+1. Custom kernel for Convolutional layers, to allow hex grid inputs. I already added it but needs testing. Kernel filter should be like:
+ ```
+  0 1 1
+  1 1 1
+  1 1 0
+  ```
+3. ~~Convolutional Network Layers. Convolutional are expensive to run and hard to implement, more in AVX2. They should be in optional ```#define```, to only use them when needed.~~ Implemented a Convolutional 2D layer. It has padding, stride, but it seems slow. I tried to cache it and transform it as a Dense-like calculation. Even with AVX2 it's dead slow. 71us/sample vs 4us/sample from pure Dense tests.
+4. ~~AlphaZero implementation.~~ A similar Alphazero NN was succesfully implemented, see https://github.com/marchete/CGZero
 
 ## References
 
