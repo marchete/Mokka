@@ -60,8 +60,8 @@ Some structures are flattened to W\*H instead of being a {W,H} matrix
 
 ## MNIST test
 
-I've tested the accuracy of the code with two MNIST tests. The code achieves 4 us/sample, that is a good performance. Tensorflow needs 9us/sample. That's why I optimize according to inputs. Zero inputs are skipped, and 1.0 inputs adds without multiplying the input.
-They are called ```MNIST Simple.ipynb``` and ```MNIST Simple29.ipynb```, they are Jupyter Notebooks. If you run both notebooks they will create two weight files on ./Mokka subfolder, called ```DENSE.weights``` and ```DENSE29.weights``` respectively.
+I've tested the accuracy of the code with three MNIST tests. The code achieves 4 us/sample, that is a good performance. Tensorflow needs 9us/sample. That's because I optimize according to inputs. Zero value inputs are skipped, and 1.0 inputs adds without multiplying the input.
+They are called ```MNIST Simple.ipynb``` , ```MNIST Simple29.ipynb``` and  ```MNIST CNN.ipynb```, they are Jupyter Notebooks. If you run both notebooks they will create three weight files on ./Mokka subfolder, called ```DENSE.weights``` , ```DENSE29.weights``` and ```CNN_T.weights``` respectively.
 
 Running the Test (requires clang++9):
 
