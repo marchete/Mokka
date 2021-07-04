@@ -130,9 +130,9 @@ I've added two functions to Compress weights file from float32 to float16. That 
 
 The float32->float16->float32 doesn't degrade a lot the accuracy. I've used that feature on Oware's CGZero and the bot is performant.
 
-```file32to16(string f32, string f16)
-file16to32(string f16, string f32)
-```
+```file32to16(string f32, string f16)```
+
+```file16to32(string f16, string f32)```
 
 ## Future work
 
