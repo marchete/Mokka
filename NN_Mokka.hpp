@@ -649,7 +649,7 @@ public:
 };
 class WeightBiasLayer : public Layer { //WeightBiasLayer
 protected:
-	vector<Tensor> weights;
+
 	Tensor bias;
 	int num_of_outputs;
 public:
@@ -664,28 +664,7 @@ public:
 		calculateOutput(inputLayer->output);
 	};
 
-	void calculateOutput(Tensor &input_mat) override {
-		for (int i = 0; i < output.xmm_size; ++i) {
-			output.xmm[i].v = bias.xmm[i].v;
-		}
-		for (size_t N = 0; N < input_mat.size; N++) {
-			float val = input_mat.xmm[0].f[N];
-			if (val == 0.0f)
-				continue;
-			else if (val == 1.0f) {
-				for (int i = 0; i < output.xmm_size; ++i) {
-					output.xmm[i].v = _mm256_add_ps(weights[N].xmm[i].v, output.xmm[i].v);
-				}
-			}
-			else {
-				auto fm = _mm256_set1_ps(val);
-				for (int i = 0; i < output.xmm_size; ++i) {
-					output.xmm[i].v = _mm256_fmadd_ps(fm, weights[N].xmm[i].v, output.xmm[i].v);
-				}
-			}
-		}
-		activator(output, output);
-	};
+
 
 };
 
@@ -749,6 +728,8 @@ public:
 //Also if an input is zero I just can ignore it. That's common on ReLU outputs (all negatives are zero) and one-hot inputs (many 0's and some 1's). This improves performance.
 class Conv2D : public WeightBiasLayer {
 public:
+	ALIGN vector<vector< __m256_f>> weightV;
+	vector<vector<int>> weightI;
 	vector<int> inputDim;
 	Tensor kernel;
 	int filters;
@@ -803,6 +784,33 @@ public:
 		setPadding(_padding);
 	}
 
+	void calculateOutput(Tensor& input_mat) override {
+		for (int i = 0; i < output.xmm_size; ++i) {
+			output.xmm[i].v = bias.xmm[i].v;
+		}
+		for (size_t N = 0; N < input_mat.size; N++) {
+			float val = input_mat.xmm[0].f[N];
+			if (val == 0.0f)
+				continue;
+			else if (val == 1.0f) {
+				for (int i=0; i < (int)weightI[N].size();++i)
+				{
+					auto idx = weightI[N][i];
+					output.xmm[idx].v = _mm256_add_ps(weightV[N][i].v, output.xmm[idx].v);
+				}
+			}
+			else {
+				auto fm = _mm256_set1_ps(val);
+				for (int i = 0; i < (int)weightI[N].size(); ++i)
+				{
+					auto idx = weightI[N][i];
+					output.xmm[idx].v = _mm256_fmadd_ps(fm,weightV[N][i].v, output.xmm[idx].v);
+				}
+			}
+		}
+		activator(output, output);
+	};
+
 	void load(std::istream& is)override {
 		SRC_weights.load(is);
 		SRC_bias.load(is);
@@ -816,9 +824,7 @@ public:
 		//It must be x,y,filters
 		ASSERT(Dim.size() == 3);
 		inputDim = Dim;
-		int totalSize = 1;
-		for (int& n : Dim)
-			totalSize *= n;
+
 
 		SRC_weights = Tensor(vector<int>{kernel.shape[0], kernel.shape[1], Dim[2], kernel.shape[2] });
 		SRC_bias = Tensor(vector<int>{kernel.shape[2]});
@@ -826,18 +832,26 @@ public:
 		int shp1 = (int)floor(((double)Dim[1] + (paddingY * 2) - kernel.shape[1]) / strideY + 1);
 		output = Tensor(vector<int>{shp0, shp1, filters});
 		num_of_outputs = output.shape[0] * output.shape[1] * output.shape[2];
-		for (int i = 0; i < totalSize; ++i)
-			weights.emplace_back(Tensor(vector<int>{num_of_outputs}));
+
 		bias = Tensor(vector<int>{num_of_outputs});
 #ifdef DEBUG_MODE
 		cerr << "***** LAYER " << name << "******" << endl;
 		//cerr << "Output " << ":" << output.shape_str()<<endl;
-		cerr << "Weights " << ":" << weights.shape_str() << endl;
+		cerr << "Weights " << ":" << SRC_weights.shape_str() << endl;
 		cerr << "Bias " << ":" << bias.shape_str() << endl;
 #endif
 	}
 
 	void precompute() override {
+		vector<Tensor> weights;
+		int totalSize = 1;
+		for (int& n : inputDim)
+			totalSize *= n;
+		for (int i = 0; i < totalSize; ++i)
+			weights.emplace_back(Tensor(vector<int>{num_of_outputs}));
+
+		weightV.resize(totalSize);
+		weightI.resize(totalSize);
 
 		//bias precalc
 		for (int i = 0; i < bias.size; ++i)
@@ -883,6 +897,20 @@ public:
 				y += strideY;
 			}
 		}
+		for (int i = 0; i < totalSize; ++i)
+		{
+			for (int s = 0; s < weights[i].xmm_size; ++s) {
+				auto val = weights[i].xmm[s];
+				bool isNonZero = val.f[0] != 0.0f || val.f[1] != 0.0f || val.f[2] != 0.0f || val.f[3] != 0.0f
+					|| val.f[4] != 0.0f || val.f[5] != 0.0f || val.f[6] != 0.0f || val.f[7] != 0.0f;
+				//if (!_mm256_testz_ps(val.v,val.v)) { //Non zero values
+				if (isNonZero){
+					weightV[i].emplace_back(val);
+					weightI[i].emplace_back(s);
+				}
+			}
+		}
+		weights.resize(0);
 	}
 
 	string getType() override { return "Conv2D"; };
@@ -891,6 +919,7 @@ public:
 
 class Dense : public WeightBiasLayer {
 public:
+	vector<Tensor> weights;
 	Dense(std::string name, int num_of_outputs, Activators activator)
 		: WeightBiasLayer(name, activator, num_of_outputs) {	};
 	Dense(int num_of_outputs, Activators activator = NONE)
@@ -909,7 +938,28 @@ public:
 		bias.save(os);
 	};
 
-
+	void calculateOutput(Tensor& input_mat) override {
+		for (int i = 0; i < output.xmm_size; ++i) {
+			output.xmm[i].v = bias.xmm[i].v;
+		}
+		for (size_t N = 0; N < input_mat.size; N++) {
+			float val = input_mat.xmm[0].f[N];
+			if (val == 0.0f)
+				continue;
+			else if (val == 1.0f) {
+				for (int i = 0; i < output.xmm_size; ++i) {
+					output.xmm[i].v = _mm256_add_ps(weights[N].xmm[i].v, output.xmm[i].v);
+				}
+			}
+			else {
+				auto fm = _mm256_set1_ps(val);
+				for (int i = 0; i < output.xmm_size; ++i) {
+					output.xmm[i].v = _mm256_fmadd_ps(fm, weights[N].xmm[i].v, output.xmm[i].v);
+				}
+			}
+		}
+		activator(output, output);
+	};
 	// Sets up the Dense layer, it takes the shape of the matrix before it to compute its own matrices.
 	void initialize(vector<int>& Dim) override {
 		int totalSize = 1;
@@ -922,7 +972,7 @@ public:
 #ifdef DEBUG_MODE
 		cerr << "***** LAYER " << name << "******" << endl;
 		//cerr << "Output " << ":" << output.shape_str()<<endl;
-		cerr << "Weights " << ":" << weights.shape_str() << endl;
+		cerr << "Weights " << ":" << weights[0].shape_str() << endl;
 		cerr << "Bias " << ":" << bias.shape_str() << endl;
 #endif
 	}
