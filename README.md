@@ -106,7 +106,7 @@ Similar summary. Same number of trainable parameters
 
 Accuracy is the same than on Test
 
-![Test3c](https://github.com/marchete/Mokka/raw/main/img/Test3c.JPG)
+![Test3c](https://github.com/marchete/Mokka/raw/main/img/Test3c_.JPG)
 
 Similar summary. Same number of trainable parameters.
 
