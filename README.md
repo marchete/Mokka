@@ -124,6 +124,13 @@ output.xmm[i].v = _mm256_fmadd_ps(fm, weights[N].xmm[i].v, output.xmm[i].v);
 
 Tester will also save a ```DENSE.test``` file. These are an export of the loaded weights, the file should be exactly the same as ```DENSE.weights```.
 
+**Weights size**
+I've added two functions to Compress weights file from float32 to float16. That means you can compress 50% the weights file. The float32->float16->float32 doesn't degrade a lot the accuracy. I've used that feature on Oware's CGZero and the bot is performant.
+
+```file32to16(string f32, string f16)
+file16to32(string f16, string f32)
+```
+
 ## Future work
 
 1. Custom kernel for Convolutional layers, to allow hex grid inputs. I already added it but needs testing. Kernel filter should be like:
