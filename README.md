@@ -76,7 +76,7 @@ When you run the binary file you'll get some accuracy percentages, these % are t
 
 **Testing MNIST Simple29.ipynb**
 
-![Test2a](https://github.com/marchete/Mokka/raw/main/img/Test2a.JPG)
+![Test2a](https://github.com/marchete/Mokka/raw/main/img/Test2a_.JPG)
 
 ![Test2b](https://github.com/marchete/Mokka/raw/main/img/Test2b.JPG)
 
@@ -88,7 +88,7 @@ Similar summary. Same number of trainable parameters
 
 **Testing MNIST Simple.ipynb**
 
-![Test1a](https://github.com/marchete/Mokka/raw/main/img/Test1a.JPG)
+![Test1a](https://github.com/marchete/Mokka/raw/main/img/Test1a_.JPG)
 
 ![Test1b](https://github.com/marchete/Mokka/raw/main/img/Test1b.JPG)
 
