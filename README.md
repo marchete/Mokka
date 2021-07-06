@@ -149,3 +149,28 @@ The float32->float16->float32 doesn't degrade a lot the accuracy. I've used that
 
 Mokka was based on Latte:
 https://github.com/amrmorsey/Latte
+
+## Todo Notes
+
+ ```
+  0 1 1
+  1 1 1
+  1 1 0
+  ```
+  
+Converted to
+
+```
+class HexGrid3x3(tf.keras.constraints.Constraint):
+    def __call__(self, w):
+        HEX=np.ones(w.shape,dtype=np.float32)
+        HEX[0,0,:,:]=0.0
+        HEX[2,2,:,:]=0.0
+        return w*HEX
+```
+
+then used as 
+
+```
+model.add(layers.Conv2D(filters=5,kernel_size=(3, 3),kernel_constraint=HexGrid3x3(),strides=(2,2),name='Conv1', activation='relu', input_shape=(28, 28, 1)))
+```
